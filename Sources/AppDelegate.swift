@@ -1885,6 +1885,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return true
         }
 
+        // Rename workspace: Cmd+Shift+R
+        if matchShortcut(event: event, shortcut: KeyboardShortcutSettings.shortcut(for: .renameWorkspace)) {
+            if let tabManager {
+                promptRenameSelectedWorkspace(tabManager: tabManager)
+            }
+            return true
+        }
+
         // Focus browser address bar: Cmd+L
         if flags == [.command] && chars == "l" {
             if let focusedPanel = tabManager?.focusedBrowserPanel {
@@ -1934,6 +1942,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         _ = panel.requestAddressBarFocus()
         browserAddressBarFocusedPanelId = panel.id
         NotificationCenter.default.post(name: .browserFocusAddressBar, object: panel.id)
+    }
+
+    private func promptRenameSelectedWorkspace(tabManager: TabManager) {
+        guard let tab = tabManager.selectedWorkspace else { return }
+        let alert = NSAlert()
+        alert.messageText = "Rename Workspace"
+        alert.informativeText = "Enter a custom name for this workspace."
+        let input = NSTextField(string: tab.customTitle ?? tab.title)
+        input.placeholderString = "Workspace name"
+        input.frame = NSRect(x: 0, y: 0, width: 240, height: 22)
+        alert.accessoryView = input
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+        let alertWindow = alert.window
+        alertWindow.initialFirstResponder = input
+        DispatchQueue.main.async {
+            alertWindow.makeFirstResponder(input)
+            input.selectText(nil)
+        }
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        tabManager.setCustomTitle(tabId: tab.id, title: input.stringValue)
     }
 
     private func shouldBypassAppShortcutForFocusedBrowserAddressBar(

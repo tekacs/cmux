@@ -30,6 +30,9 @@ enum KeyboardShortcutSettings {
         // Panels
         case openBrowser
 
+        // Workspace management
+        case renameWorkspace
+
         var id: String { rawValue }
 
         var label: String {
@@ -52,6 +55,7 @@ enum KeyboardShortcutSettings {
             case .splitRight: return "Split Right"
             case .splitDown: return "Split Down"
             case .openBrowser: return "Open Browser"
+            case .renameWorkspace: return "Rename Workspace"
             }
         }
 
@@ -75,6 +79,7 @@ enum KeyboardShortcutSettings {
             case .prevSurface: return "shortcut.prevSurface"
             case .newSurface: return "shortcut.newSurface"
             case .openBrowser: return "shortcut.openBrowser"
+            case .renameWorkspace: return "shortcut.renameWorkspace"
             }
         }
 
@@ -116,6 +121,8 @@ enum KeyboardShortcutSettings {
                 return StoredShortcut(key: "t", command: true, shift: false, option: false, control: false)
             case .openBrowser:
                 return StoredShortcut(key: "l", command: true, shift: true, option: false, control: false)
+            case .renameWorkspace:
+                return StoredShortcut(key: "r", command: true, shift: true, option: false, control: false)
             }
         }
 
