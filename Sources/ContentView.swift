@@ -1386,6 +1386,7 @@ private struct TabItemView: View {
     @Binding var dropIndicator: SidebarDropIndicator?
     @State private var isHovering = false
     @State private var rowHeight: CGFloat = 1
+    @State private var tabTransferHoverWorkItem: DispatchWorkItem?
     @AppStorage(ShortcutHintDebugSettings.sidebarHintXKey) private var sidebarShortcutHintXOffset = ShortcutHintDebugSettings.defaultSidebarHintX
     @AppStorage(ShortcutHintDebugSettings.sidebarHintYKey) private var sidebarShortcutHintYOffset = ShortcutHintDebugSettings.defaultSidebarHintY
     @AppStorage(ShortcutHintDebugSettings.alwaysShowHintsKey) private var alwaysShowShortcutHints = ShortcutHintDebugSettings.defaultAlwaysShowHints
@@ -1636,6 +1637,11 @@ private struct TabItemView: View {
             targetRowHeight: rowHeight,
             dragAutoScrollController: dragAutoScrollController,
             dropIndicator: $dropIndicator
+        ))
+        .onDrop(of: ["com.splittabbar.tabtransfer"], delegate: SidebarTabTransferHoverDelegate(
+            tab: tab,
+            tabManager: tabManager,
+            hoverWorkItem: $tabTransferHoverWorkItem
         ))
         .onTapGesture {
             updateSelection()
@@ -2424,6 +2430,51 @@ private struct SidebarTabDropDelegate: DropDelegate {
         } else {
             lastSidebarSelectionIndex = nil
         }
+    }
+}
+
+/// Drop delegate that detects when a Bonsplit tab drag hovers over a sidebar workspace
+/// entry and switches to that workspace after a short delay (spring-loaded behavior).
+/// The delegate does NOT consume the drop — the actual drop happens on the destination
+/// workspace's Bonsplit tab bar after the workspace switch.
+private struct SidebarTabTransferHoverDelegate: DropDelegate {
+    let tab: Workspace
+    let tabManager: TabManager
+    @Binding var hoverWorkItem: DispatchWorkItem?
+
+    private static let switchDelay: TimeInterval = 0.5
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: ["com.splittabbar.tabtransfer"])
+    }
+
+    func dropEntered(info: DropInfo) {
+        // Don't switch if already on this workspace.
+        guard tabManager.selectedTabId != tab.id else { return }
+
+        hoverWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [tab, tabManager] in
+            tabManager.selectTab(tab)
+        }
+        hoverWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.switchDelay, execute: workItem)
+    }
+
+    func dropExited(info: DropInfo) {
+        hoverWorkItem?.cancel()
+        hoverWorkItem = nil
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        hoverWorkItem?.cancel()
+        hoverWorkItem = nil
+        // Don't consume the drop — return false so the drag can continue
+        // to the Bonsplit tab bar where it will be properly handled.
+        return false
     }
 }
 

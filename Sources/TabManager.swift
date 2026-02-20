@@ -395,6 +395,7 @@ class TabManager: ObservableObject {
     func addWorkspace(workingDirectory overrideWorkingDirectory: String? = nil) -> Workspace {
         let workingDirectory = normalizedWorkingDirectory(overrideWorkingDirectory) ?? preferredWorkingDirectoryForNewTab()
         let newWorkspace = Workspace(title: "Terminal \(tabs.count + 1)", workingDirectory: workingDirectory)
+        setupCrossControllerDropHandler(for: newWorkspace)
         let insertIndex = newTabInsertIndex()
         if insertIndex >= 0 && insertIndex <= tabs.count {
             tabs.insert(newWorkspace, at: insertIndex)
@@ -599,6 +600,7 @@ class TabManager: ObservableObject {
 
     /// Attach an existing workspace to this window.
     func attachWorkspace(_ workspace: Workspace, at index: Int? = nil, select: Bool = true) {
+        setupCrossControllerDropHandler(for: workspace)
         let insertIndex: Int = {
             guard let index else { return tabs.count }
             return max(0, min(index, tabs.count))
@@ -606,6 +608,38 @@ class TabManager: ObservableObject {
         tabs.insert(workspace, at: insertIndex)
         if select {
             selectedTabId = workspace.id
+        }
+    }
+
+    /// Sets up the cross-controller drop handler for a workspace so that tabs dragged
+    /// from one workspace's tab bar can be dropped into another workspace's tab bar.
+    private func setupCrossControllerDropHandler(for workspace: Workspace) {
+        workspace.bonsplitController.onCrossControllerDrop = { [weak self, weak workspace] sourceController, tab, sourcePaneId, destPaneId, index in
+            guard let self, let destWorkspace = workspace else { return false }
+
+            // Find the source workspace by matching its BonsplitController.
+            guard let srcWorkspace = self.tabs.first(where: { $0.bonsplitController === sourceController }) else {
+                return false
+            }
+
+            // Map the Bonsplit TabID to the cmux panel ID.
+            guard let panelId = srcWorkspace.panelIdFromSurfaceId(tab.id) else { return false }
+
+            // Detach from source workspace.
+            guard let transfer = srcWorkspace.detachSurface(panelId: panelId) else { return false }
+
+            // Attach to destination workspace.
+            if destWorkspace.attachDetachedSurface(transfer, inPane: destPaneId, atIndex: index, focus: true) == nil {
+                // Roll back: re-attach to source.
+                let rollbackPane = srcWorkspace.bonsplitController.focusedPaneId
+                    ?? srcWorkspace.bonsplitController.allPaneIds.first
+                if let rollbackPane {
+                    _ = srcWorkspace.attachDetachedSurface(transfer, inPane: rollbackPane, atIndex: nil, focus: true)
+                }
+                return false
+            }
+
+            return true
         }
     }
 
